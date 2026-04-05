@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+
+debug/
+output/
+config/region.json
+docs/ocr_tool_spec.md
+docs/public_release_checklist.md
+docs/troubleshooting_history.md

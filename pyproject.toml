@@ -1,0 +1,85 @@
+[project]
+name = "market-screenshot-ocr"
+version = "0.1.0"
+description = "Windows-local OCR tool for game market screenshots."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "numpy>=1.26.0",
+    "opencv-python>=4.10.0",
+    "paddleocr>=3.0.0",
+]
+
+[project.optional-dependencies]
+cpu = [
+    "paddlepaddle>=3.0.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = false
+exclude-newer = "1 week"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "poethepoet>=0.37.0",
+    "ruff>=0.15.8",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = [
+    ".venv",
+    "debug",
+    "output",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/ocr_engine.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["app.py", "src"]
+ignore_missing_imports = true
+exclude = [
+    "^\\.venv/",
+    "^debug/",
+    "^output/",
+]
+disable_error_code = [
+    "arg-type",
+    "call-overload",
+    "misc",
+]
+
+[tool.poe.tasks.format]
+help = "Format Python files with Ruff."
+cmd = "ruff format ."
+
+[tool.poe.tasks.lint]
+help = "Run Ruff lint checks."
+cmd = "ruff check ."
+
+[tool.poe.tasks.lint_fix]
+help = "Run Ruff lint checks and apply safe fixes."
+cmd = "ruff check . --fix"
+
+[tool.poe.tasks.typecheck]
+help = "Run mypy for gradual static type checking."
+cmd = "mypy"
+
+[tool.poe.tasks.check]
+help = "Run lint and type checks."
+sequence = ["lint", "typecheck"]
+
+[tool.poe.tasks.run]
+help = "Launch the OCR GUI."
+cmd = "python app.py"
