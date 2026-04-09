@@ -19,6 +19,8 @@
 - 最初の 1 枚だけで読み取り範囲を指定
 - 残り画像に同じ範囲を適用
 - 露店検索画面の `item_name`、`quantity`、`price` を CSV 出力
+- 価格ごとの数量合計を棒グラフ PNG で出力
+- 全価格帯数量と最安値 1.5 倍以内の数量合計を TXT で出力
 - 前回設定の再利用
 - 末尾の空行の自動除外
 
@@ -65,7 +67,8 @@ uv pip install "paddlepaddle>=3.0.0"
 8. 必要なら前回設定を再利用する
 9. 最初の 1 枚で、露店検索画面の「アイテム名」「数量」「価格」の範囲を順に確認または選択する
 10. 最終確認画面で 3 つの範囲を確認し、OCR を実行する
-11. `output/` に出力された CSV を確認する
+11. `output/` に出力された CSV / グラフ / 集計 TXT を確認する
+12. `price_suspect` が付いた行があった場合は、完了後の警告ポップアップを確認する
 
 実行:
 
@@ -113,7 +116,17 @@ uv run python app.py
 
 ## 出力
 
-CSV は `output/ocr_result_YYYYMMDD_HHMMSS.csv` に保存されます。
+出力ファイル:
+
+- `output/ocr_result_YYYYMMDD_HHMMSS.csv`
+  - OCR の元データ
+- `output/ocr_result_YYYYMMDD_HHMMSS_price_quantity_chart.png`
+  - `price_normalized` を横軸、同価格を合算した `quantity_normalized` を縦軸にした棒グラフ
+  - グラフタイトルは先頭行のアイテム名とキャプチャ時刻を使います
+- `output/ocr_result_YYYYMMDD_HHMMSS_summary.txt`
+  - 全価格帯の合計数量
+  - 最安値の 1.5 倍までの価格帯に含まれる合計数量
+  - あわせて、実際にどの価格まで集計したかを記録します
 
 各列の意味:
 
@@ -138,6 +151,8 @@ CSV は `output/ocr_result_YYYYMMDD_HHMMSS.csv` に保存されます。
   - 記号や単位を除いて数字として扱いやすくした価格
 - `price_suspect`
   - 価格の並びや読み取り結果が怪しいときに `1` が入る補助列
+
+`price_suspect` が 1 件でもある場合は、CSV / PNG / TXT の出力完了後に警告ポップアップを表示します。
 
 ## 設定ファイル
 

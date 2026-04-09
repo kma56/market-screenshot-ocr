@@ -21,6 +21,7 @@
   - ROI 選択画面、パン / ズーム / 最終確認
 - `src/pipeline.py`
   - 画像処理全体、行分割、OCR、CSV 行生成
+  - 価格別数量グラフ PNG と数量集計 TXT の生成も担当
 - `src/ocr_engine.py`
   - PaddleOCR の認識エンジン
 - `src/preprocess.py`
@@ -128,6 +129,22 @@ uv run poe run
 - 同一アイテム名の価格が 4 件未満なら外れ値判定はしない
 - `MAD` が 0 に近い場合は無理に判定しない
 - 前後の同一アイテム行との価格比が `0.85` 以上なら、近い価格の支えがあるとみなす
+
+## 出力物の整理
+
+- CSV
+  - `output/ocr_result_YYYYMMDD_HHMMSS.csv`
+  - OCR の生結果と正規化結果、`price_suspect` を保存する
+- グラフ PNG
+  - `output/ocr_result_YYYYMMDD_HHMMSS_price_quantity_chart.png`
+  - `price_normalized` ごとに `quantity_normalized` を合算して棒グラフ化する
+  - タイトルは先頭行のアイテム名と `captured_at` を使う
+- 集計 TXT
+  - `output/ocr_result_YYYYMMDD_HHMMSS_summary.txt`
+  - 全価格帯の合計数量と、最安値の 1.5 倍までの価格帯に含まれる数量合計を保存する
+
+`src/app.py` の完了ダイアログは、この 3 つの出力先を表示します。  
+また、どこかの行に `price_suspect` があれば、完了後に追加の警告ポップアップを出します。
 
 ## 補足
 

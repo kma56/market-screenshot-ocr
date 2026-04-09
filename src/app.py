@@ -71,12 +71,19 @@ def main() -> int:
 
     summary = (
         f"CSV: {result.csv_path}\n"
+        f"Graph: {result.graph_path}\n"
+        f"Summary TXT: {result.summary_txt_path}\n"
         f"Processed images: {result.processed_images}\n"
         f"Output rows: {result.total_rows}\n"
         f"Warnings: {len(result.warnings)}\n"
         f"Errors: {len(result.errors)}"
     )
     messagebox.showinfo("Completed", summary)
+    if result.has_price_suspects:
+        messagebox.showwarning(
+            "Price Warning",
+            "price_suspect が付いた行があります。\nCSV を確認してください。",
+        )
     return 0
 
 

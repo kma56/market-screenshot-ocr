@@ -6,8 +6,11 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 from src.csv_writer import write_csv
 from src.image_loader import LoadedImage, list_images, load_image
@@ -22,10 +25,13 @@ from src.ui_helpers import crop_region, draw_regions, save_debug_image
 @dataclass
 class ProcessResult:
     csv_path: Path
+    graph_path: Path
+    summary_txt_path: Path
     processed_images: int
     total_rows: int
     errors: list[str]
     warnings: list[str]
+    has_price_suspects: bool
 
 
 class OCRPipeline:
@@ -65,12 +71,18 @@ class OCRPipeline:
 
         csv_path = self.output_dir / f"ocr_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         write_csv(csv_path, csv_rows)
+        graph_path = csv_path.with_name(f"{csv_path.stem}_price_quantity_chart.png")
+        summary_txt_path = csv_path.with_name(f"{csv_path.stem}_summary.txt")
+        self._write_outputs(csv_rows, graph_path, summary_txt_path)
         return ProcessResult(
             csv_path=csv_path,
+            graph_path=graph_path,
+            summary_txt_path=summary_txt_path,
             processed_images=processed_images,
             total_rows=len(csv_rows),
             errors=errors,
             warnings=warnings,
+            has_price_suspects=any(row["price_suspect"].strip() for row in csv_rows),
         )
 
     def _matches_resolution(self, loaded: LoadedImage) -> bool:
@@ -324,3 +336,229 @@ class OCRPipeline:
                 return True
 
         return False
+
+    def _write_outputs(self, csv_rows: list[dict[str, str]], graph_path: Path, summary_txt_path: Path) -> None:
+        aggregated_points = self._aggregate_price_quantities(csv_rows)
+        title = self._build_graph_title(csv_rows)
+        self._write_price_quantity_chart(graph_path, aggregated_points, title)
+        self._write_quantity_summary(summary_txt_path, aggregated_points)
+
+    def _aggregate_price_quantities(self, csv_rows: list[dict[str, str]]) -> list[tuple[int, int]]:
+        aggregated: dict[int, int] = {}
+        for row in csv_rows:
+            price_text = row["price_normalized"].strip()
+            quantity_text = row["quantity_normalized"].strip()
+            if not price_text or not quantity_text:
+                continue
+            try:
+                price = int(price_text)
+                quantity = int(quantity_text)
+            except ValueError:
+                continue
+            if price <= 0 or quantity <= 0:
+                continue
+            aggregated[price] = aggregated.get(price, 0) + quantity
+        return sorted(aggregated.items())
+
+    def _build_graph_title(self, csv_rows: list[dict[str, str]]) -> str:
+        if not csv_rows:
+            return "OCR Result"
+
+        first_row = csv_rows[0]
+        item_name = first_row["item_name_normalized"].strip() or first_row["item_name_raw"].strip() or "不明アイテム"
+        captured_at = first_row["captured_at"].strip() or "unknown"
+        return f"{item_name}＠{captured_at}"
+
+    def _write_quantity_summary(self, summary_txt_path: Path, aggregated_points: list[tuple[int, int]]) -> None:
+        total_quantity = sum(quantity for _, quantity in aggregated_points)
+        first_band_limit = 0
+        first_band_quantity = 0
+
+        if aggregated_points:
+            minimum_price = aggregated_points[0][0]
+            raw_limit = minimum_price * 1.5
+            first_band_limit = math.floor(raw_limit)
+            eligible_prices = [price for price, _ in aggregated_points if price <= raw_limit]
+            if eligible_prices:
+                first_band_limit = max(eligible_prices)
+            first_band_quantity = sum(quantity for price, quantity in aggregated_points if price <= raw_limit)
+
+        lines = [
+            f"・全価格帯の合計数量：{total_quantity}",
+            f"・{first_band_limit}zまでの合計数量：{first_band_quantity}",
+        ]
+        summary_txt_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def _write_price_quantity_chart(self, graph_path: Path, aggregated_points: list[tuple[int, int]], title: str) -> None:
+        width = 1600
+        height = 900
+        background = np.full((height, width, 3), 250, dtype=np.uint8)
+
+        frame_color = (190, 190, 190)
+        cv2.rectangle(background, (14, 14), (width - 14, height - 14), frame_color, 1)
+
+        title_image = self._render_text_image(title, font_scale=0.62, thickness=1, text_color=(110, 110, 110))
+        title_height = title_image.shape[0]
+        title_x = 48
+        title_y = 42
+        self._paste_image(background, title_image, title_x, title_y)
+
+        chart_left = 150
+        chart_top = title_y + title_height + 32
+        chart_right = width - 70
+        chart_bottom = height - 130
+        chart_width = chart_right - chart_left
+        chart_height = chart_bottom - chart_top
+
+        plot_background = (252, 252, 252)
+        axis_color = (165, 165, 165)
+        grid_color = (225, 225, 225)
+        bar_color = (236, 127, 42)
+        label_color = (236, 127, 42)
+
+        cv2.rectangle(background, (chart_left, chart_top), (chart_right, chart_bottom), plot_background, -1)
+        cv2.line(background, (chart_left, chart_bottom), (chart_right, chart_bottom), axis_color, 1)
+        cv2.line(background, (chart_left, chart_top), (chart_left, chart_bottom), axis_color, 1)
+
+        axis_x_label = self._render_text_image("価格", font_scale=0.6, thickness=1, text_color=(40, 40, 40))
+        axis_x_y = chart_bottom + 52
+        self._paste_image(background, axis_x_label, chart_left + (chart_width - axis_x_label.shape[1]) // 2, axis_x_y)
+
+        axis_y_label = self._render_text_image("数量", font_scale=0.6, thickness=1, rotate_ccw=True, text_color=(40, 40, 40))
+        axis_y_x = 42
+        axis_y_y = chart_top + (chart_height - axis_y_label.shape[0]) // 2
+        self._paste_image(background, axis_y_label, axis_y_x, axis_y_y)
+
+        if not aggregated_points:
+            empty_label = self._render_text_image("No valid data", font_scale=0.9, thickness=2)
+            self._paste_image(
+                background,
+                empty_label,
+                chart_left + (chart_width - empty_label.shape[1]) // 2,
+                chart_top + (chart_height - empty_label.shape[0]) // 2,
+            )
+            graph_path.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(graph_path), background)
+            return
+
+        max_quantity = max(quantity for _, quantity in aggregated_points)
+        y_tick_step = self._choose_y_tick_step(max_quantity)
+        y_axis_max = max(y_tick_step, int(math.ceil(max_quantity / y_tick_step) * y_tick_step))
+        tick_values = list(range(0, y_axis_max + y_tick_step, y_tick_step))
+
+        for tick_value in tick_values:
+            ratio = 0 if y_axis_max <= 0 else tick_value / y_axis_max
+            y = int(chart_bottom - chart_height * ratio)
+            cv2.line(background, (chart_left, y), (chart_right, y), grid_color, 1)
+            tick_label = self._render_text_image(str(tick_value), font_scale=0.42, thickness=1, text_color=(70, 70, 70))
+            self._paste_image(background, tick_label, chart_left - tick_label.shape[1] - 18, y - tick_label.shape[0] // 2)
+
+        bar_count = len(aggregated_points)
+        slot_width = chart_width / max(bar_count, 1)
+        bar_width = max(10, int(slot_width * 0.62))
+
+        for index, (price, quantity) in enumerate(aggregated_points):
+            center_x = chart_left + int((index + 0.5) * chart_width / bar_count)
+            half_width = bar_width // 2
+            x1 = max(chart_left + 1, center_x - half_width)
+            x2 = min(chart_right - 1, center_x + half_width)
+            bar_height = 0 if y_axis_max <= 0 else int(chart_height * (quantity / y_axis_max))
+            y1 = max(chart_top + 1, chart_bottom - bar_height)
+            cv2.rectangle(background, (x1, y1), (x2, chart_bottom - 1), bar_color, -1)
+
+            quantity_label = self._render_text_image(str(quantity), font_scale=0.36, thickness=1, text_color=label_color)
+            quantity_x = center_x - quantity_label.shape[1] // 2
+            quantity_y = max(chart_top + 4, y1 - quantity_label.shape[0] - 6)
+            self._paste_image(background, quantity_label, quantity_x, quantity_y)
+
+            price_label = self._render_text_image(f"{price}z", font_scale=0.34, thickness=1, rotate_ccw=True, text_color=(70, 70, 70))
+            label_x = center_x - price_label.shape[1] // 2
+            label_y = chart_bottom + 10
+            self._paste_image(background, price_label, label_x, label_y)
+
+        graph_path.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(graph_path), background)
+
+    def _render_text_image(
+        self,
+        text: str,
+        *,
+        font_scale: float,
+        thickness: int,
+        rotate_ccw: bool = False,
+        text_color: tuple[int, int, int] = (20, 20, 20),
+    ) -> np.ndarray[Any, Any]:
+        font_size = max(14, int(20 * font_scale * 2.2))
+        font = ImageFont.truetype(str(self._find_font_path(text)), font_size)
+
+        dummy_image = Image.new("RGB", (1, 1), "white")
+        dummy_draw = ImageDraw.Draw(dummy_image)
+        bbox = dummy_draw.textbbox((0, 0), text, font=font, stroke_width=max(0, thickness - 1))
+        text_width = max(1, bbox[2] - bbox[0])
+        text_height = max(1, bbox[3] - bbox[1])
+
+        image = Image.new("RGB", (text_width + 8, text_height + 8), "white")
+        draw = ImageDraw.Draw(image)
+        draw.text(
+            (4 - bbox[0], 4 - bbox[1]),
+            text,
+            fill=text_color,
+            font=font,
+            stroke_width=max(0, thickness - 1),
+        )
+
+        rendered = np.array(image)
+        if rotate_ccw:
+            return cv2.rotate(rendered, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        return rendered
+
+    def _paste_image(self, base: np.ndarray[Any, Any], overlay: np.ndarray[Any, Any], x: int, y: int) -> None:
+        x = max(0, x)
+        y = max(0, y)
+        if x >= base.shape[1] or y >= base.shape[0]:
+            return
+
+        height = min(overlay.shape[0], base.shape[0] - y)
+        width = min(overlay.shape[1], base.shape[1] - x)
+        if height <= 0 or width <= 0:
+            return
+
+        base[y : y + height, x : x + width] = overlay[:height, :width]
+
+    def _find_font_path(self, text: str) -> Path:
+        ascii_candidate_paths = [
+            Path(r"C:\Windows\Fonts\arial.ttf"),
+            Path(r"C:\Windows\Fonts\arialbd.ttf"),
+        ]
+        japanese_candidate_paths = [
+            Path(r"C:\Windows\Fonts\meiryo.ttc"),
+            Path(r"C:\Windows\Fonts\YuGothR.ttc"),
+            Path(r"C:\Windows\Fonts\msgothic.ttc"),
+        ]
+        candidate_paths = japanese_candidate_paths if self._contains_non_ascii(text) else ascii_candidate_paths + japanese_candidate_paths
+        for path in candidate_paths:
+            if path.exists():
+                return path
+        raise FileNotFoundError("No suitable Japanese font was found.")
+
+    def _contains_non_ascii(self, text: str) -> bool:
+        return any(ord(char) > 127 for char in text)
+
+    def _choose_y_tick_step(self, max_quantity: int) -> int:
+        if max_quantity <= 0:
+            return 1
+
+        magnitude = 10 ** int(math.floor(math.log10(max_quantity)))
+        normalized = max_quantity / magnitude
+
+        if normalized <= 1:
+            multiplier = 0.1
+        elif normalized <= 2:
+            multiplier = 0.2
+        elif normalized <= 5:
+            multiplier = 0.5
+        else:
+            multiplier = 1.0
+
+        return max(1, int(magnitude * multiplier))
