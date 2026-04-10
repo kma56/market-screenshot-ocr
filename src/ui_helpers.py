@@ -95,7 +95,9 @@ def pad_to_size(image: np.ndarray, width: int, height: int) -> np.ndarray:
 def put_panel_label(image: np.ndarray, label: str) -> np.ndarray:
     canvas = image.copy()
     cv2.rectangle(canvas, (0, 0), (canvas.shape[1], 30), (30, 30, 30), -1)
-    return draw_text_fit(canvas, label, (10, 4), max_width=canvas.shape[1] - 20, start_font_size=22, color=(240, 240, 240))
+    return draw_text_fit(
+        canvas, label, (10, 4), max_width=canvas.shape[1] - 20, start_font_size=22, color=(240, 240, 240)
+    )
 
 
 def save_debug_image(path: Path, image: np.ndarray) -> None:
@@ -112,7 +114,9 @@ def build_footer(width: int, lines: list[str]) -> np.ndarray:
     return footer
 
 
-def draw_text(image: np.ndarray, text: str, position: tuple[int, int], font_size: int, color: tuple[int, int, int]) -> np.ndarray:
+def draw_text(
+    image: np.ndarray, text: str, position: tuple[int, int], font_size: int, color: tuple[int, int, int]
+) -> np.ndarray:
     font = load_font(font_size)
     if font is None:
         cv2.putText(

@@ -29,15 +29,19 @@ def list_images(folder: Path) -> list[Path]:
     return sorted(files, key=natural_sort_key)
 
 
+def get_captured_at(path: Path) -> datetime:
+    stat = path.stat()
+    captured_ts = getattr(stat, "st_ctime", stat.st_mtime)
+    return datetime.fromtimestamp(captured_ts)
+
+
 def load_image(path: Path) -> LoadedImage:
     data = np.fromfile(str(path), dtype=np.uint8)
     image = cv2.imdecode(data, cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError(f"Unable to read image: {path}")
     height, width = image.shape[:2]
-    stat = path.stat()
-    captured_ts = getattr(stat, "st_ctime", stat.st_mtime)
-    captured_at = datetime.fromtimestamp(captured_ts)
+    captured_at = get_captured_at(path)
     return LoadedImage(
         path=path,
         image=image,

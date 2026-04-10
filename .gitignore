@@ -4,7 +4,11 @@ __pycache__/
 
 debug/
 output/
+input/
 config/region.json
+config/ro_auto.json
+config/ro_auto_state.json
 docs/ocr_tool_spec.md
+# Internal working notes. Keep these ignored and do not unignore them for documentation sync.
 docs/public_release_checklist.md
 docs/troubleshooting_history.md

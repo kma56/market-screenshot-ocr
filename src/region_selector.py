@@ -48,7 +48,9 @@ class ROISelector:
         self.base_width = 960
         self.base_height = 720
         self.display_rect = (0, 0, self.base_width, self.base_height)
-        self.status_message = f"移動モードです。ドラッグで表示位置を動かし、V キーで {self.active_region_name} の範囲選択に切り替えます。"
+        self.status_message = (
+            f"移動モードです。ドラッグで表示位置を動かし、V キーで {self.active_region_name} の範囲選択に切り替えます。"
+        )
 
     def run(self) -> AppConfig | None:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
@@ -74,7 +76,9 @@ class ROISelector:
                     cv2.destroyWindow(WINDOW_NAME)
                     return self.config
                 if self.config.regions[self.active_region_name] is None:
-                    self.status_message = f"{self.active_region_name} ROI が未設定です。V キーで範囲選択に切り替えてください。"
+                    self.status_message = (
+                        f"{self.active_region_name} ROI が未設定です。V キーで範囲選択に切り替えてください。"
+                    )
                     continue
                 next_region = self._next_region_name()
                 if next_region is not None:

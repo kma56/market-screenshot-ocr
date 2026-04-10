@@ -23,6 +23,7 @@
 - 全価格帯数量と最安値 1.5 倍以内の数量合計を TXT で出力
 - 前回設定の再利用
 - 末尾の空行の自動除外
+- Ragnarok Online 用の自動実行モード
 
 ## 動作環境
 
@@ -54,6 +55,7 @@ uv pip install "paddlepaddle>=3.0.0"
 ```
 
 このプロジェクトは `uv` を前提にしています。依存は `.venv` に入るため、グローバル Python 環境を汚しにくい構成です。
+以下の実行例は、`.venv\Scripts\Activate.ps1` を実行して仮想環境を有効化した前提です。
 
 ## 使い方
 
@@ -73,8 +75,58 @@ uv pip install "paddlepaddle>=3.0.0"
 実行:
 
 ```powershell
-uv run python app.py
+python app.py
 ```
+
+Ragnarok Online 用の自動実行:
+
+```powershell
+python app.py --ro-auto
+```
+
+または:
+
+```powershell
+poe run_ro_auto
+```
+
+## Ragnarok Online 自動実行モード
+
+`--ro-auto` は、Ragnarok Online のスクリーンショット保存先から最新のスクリーンショット群を見つけて、
+入力フォルダ準備から OCR 実行、出力作成までを無人で行うモードです。
+
+動作の流れ:
+
+1. `C:\Gravity\Ragnarok\ScreenShot` を見る
+2. `screenNoatun000.jpg` のような連番ファイルを候補にする
+3. 最新画像からさかのぼって、撮影時刻が一定秒数以内の画像を 1 バッチとして選ぶ
+4. 選ばれた画像を `input/ro_auto/<batch_id>/` にコピーする
+5. 保存済みの `config/region.json` を使って OCR を実行する
+6. `output/ro_auto/<batch_id>/` に CSV / グラフ / 集計 TXT / ログを出力する
+
+このモードでは GUI は出ません。  
+読み取り範囲を変えたいときは、通常モードを起動して ROI を保存し直してください。
+
+デフォルト設定:
+
+- スクリーンショット保存先
+  - `C:\Gravity\Ragnarok\ScreenShot`
+- バッチ判定時間
+  - 最新画像から 60 秒以内
+- OCR モード
+  - `accuracy`
+- デバッグ画像
+  - 保存しない
+
+同じ最新バッチをすでに自動処理済みの場合は、再処理せず終了します。  
+同じバッチをもう一度処理したい場合:
+
+```powershell
+python app.py --ro-auto --ro-auto-force
+```
+
+自動実行用の設定を変えたい場合は、`config/ro_auto.sample.json` を元に `config/ro_auto.json` を作成してください。  
+`batch_window_seconds` を変えると、最新画像から何秒前までを同一バッチに含めるか調整できます。
 
 ## 範囲指定のコツ
 
@@ -128,6 +180,9 @@ uv run python app.py
   - 最安値の 1.5 倍までの価格帯に含まれる合計数量
   - あわせて、実際にどの価格まで集計したかを記録します
 
+`--ro-auto` の場合は、これらの出力が `output/ro_auto/<batch_id>/` の下にまとまって作成されます。  
+処理対象として選ばれた元画像のコピーは `input/ro_auto/<batch_id>/` に保存されます。
+
 各列の意味:
 
 - `source_file`
@@ -158,8 +213,12 @@ uv run python app.py
 
 - ローカル設定: `config/region.json`
 - 共有用サンプル: `config/region.sample.json`
+- RO 自動実行のローカル設定: `config/ro_auto.json`
+- RO 自動実行の共有用サンプル: `config/ro_auto.sample.json`
+- RO 自動実行の状態保存: `config/ro_auto_state.json`
 
 `config/region.json` はローカル専用で、Git には含めません。
+`config/ro_auto.json` と `config/ro_auto_state.json` もローカル専用です。
 
 ## 制約
 

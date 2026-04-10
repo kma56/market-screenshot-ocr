@@ -89,10 +89,7 @@ class AppConfig:
         return {
             "image_size": asdict(self.image_size),
             "row_count": self.row_count,
-            "regions": {
-                name: asdict(region) if region else None
-                for name, region in self.regions.items()
-            },
+            "regions": {name: asdict(region) if region else None for name, region in self.regions.items()},
             "preprocess": asdict(self.preprocess),
             "ocr": asdict(self.ocr),
             "debug_save_enabled": self.debug_save_enabled,

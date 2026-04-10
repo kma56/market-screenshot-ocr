@@ -1,27 +1,65 @@
 from __future__ import annotations
 
+import argparse
 import ctypes
 import logging
 import sys
 from pathlib import Path
 from tkinter import Tk, filedialog, messagebox, simpledialog
+from typing import Sequence
 
 import cv2
 
 from src.image_loader import list_images, load_image
-from src.pipeline import OCRPipeline
-from src.region_selector import select_regions
+from src.ro_auto import (
+    ROAutoConfig,
+    ROAutoState,
+    build_batch_summary,
+    create_run_plan,
+    discover_latest_batch,
+    is_already_processed,
+    load_ro_pipeline_config,
+    record_processed_batch,
+    stage_batch,
+)
 from src.settings import AppConfig
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "region.json"
+DEFAULT_RO_AUTO_CONFIG_PATH = PROJECT_ROOT / "config" / "ro_auto.json"
+DEFAULT_RO_AUTO_STATE_PATH = PROJECT_ROOT / "config" / "ro_auto_state.json"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "output"
 DEFAULT_DEBUG_DIR = PROJECT_ROOT / "debug"
 DEFAULT_LOG_PATH = PROJECT_ROOT / "output" / "ocr_tool.log"
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.ro_auto:
+        return run_ro_auto(force=args.ro_auto_force)
+    return run_interactive()
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Market Screenshot OCR Tool")
+    parser.add_argument(
+        "--ro-auto",
+        action="store_true",
+        help="Use saved ROI config and automatically process the latest Ragnarok Online screenshot batch.",
+    )
+    parser.add_argument(
+        "--ro-auto-force",
+        action="store_true",
+        help="Process the latest Ragnarok Online screenshot batch even if it matches the last auto-run.",
+    )
+    return parser.parse_args(argv)
+
+
+def run_interactive() -> int:
     enable_windows_dpi_awareness()
+    from src.pipeline import OCRPipeline
+    from src.region_selector import select_regions
+
     root = Tk()
     root.withdraw()
     root.attributes("-topmost", True)
@@ -29,16 +67,19 @@ def main() -> int:
 
     input_dir = choose_input_folder(root)
     if input_dir is None:
+        root.destroy()
         return 1
 
     image_paths = list_images(input_dir)
     if not image_paths:
         messagebox.showerror("No Images", "選択フォルダ内に .jpg / .png が見つかりません。")
+        root.destroy()
         return 1
 
     first_image = load_image(image_paths[0])
     config = prepare_config(root, first_image.width, first_image.height)
     if config is None:
+        root.destroy()
         return 1
 
     selected = select_regions(
@@ -50,10 +91,11 @@ def main() -> int:
     )
     cv2.destroyAllWindows()
     if selected is None:
+        root.destroy()
         return 1
 
     save_after_selection(root, selected)
-    logger = configure_logging()
+    logger = configure_logging(DEFAULT_LOG_PATH)
 
     pipeline = OCRPipeline(
         config=selected,
@@ -67,6 +109,7 @@ def main() -> int:
     except Exception as exc:
         logger.exception("Pipeline failed: %s", exc)
         messagebox.showerror("OCR Failed", str(exc))
+        root.destroy()
         return 1
 
     summary = (
@@ -84,6 +127,7 @@ def main() -> int:
             "Price Warning",
             "price_suspect が付いた行があります。\nCSV を確認してください。",
         )
+    root.destroy()
     return 0
 
 
@@ -157,14 +201,80 @@ def save_after_selection(root: Tk, config: AppConfig) -> None:
         config.save(DEFAULT_CONFIG_PATH)
 
 
-def configure_logging() -> logging.Logger:
-    DEFAULT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+def run_ro_auto(force: bool) -> int:
+    enable_windows_dpi_awareness()
+    from src.pipeline import OCRPipeline
+
+    try:
+        auto_config = ROAutoConfig.load(DEFAULT_RO_AUTO_CONFIG_PATH, PROJECT_ROOT)
+        pipeline_config = load_ro_pipeline_config(DEFAULT_CONFIG_PATH, auto_config)
+        state = ROAutoState.load(DEFAULT_RO_AUTO_STATE_PATH)
+        batch = discover_latest_batch(auto_config)
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if batch is None:
+        print(
+            f"No matching screenshots were found in {auto_config.source_dir}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if is_already_processed(batch, state, auto_config, force=force):
+        message = f"Latest batch already processed: {build_batch_summary(batch)}"
+        if state.last_output_dir:
+            message += f"\nLast output: {state.last_output_dir}"
+        print(message)
+        return 0
+
+    plan = create_run_plan(auto_config, batch)
+    logger = configure_logging(plan.log_path)
+    logger.info("RO auto mode started.")
+    logger.info("Selected batch: %s", build_batch_summary(batch))
+    logger.info("Staging screenshots from %s", auto_config.source_dir)
+
+    try:
+        stage_batch(plan, auto_config.source_dir)
+        logger.info("Staged screenshots to %s", plan.staging_dir)
+    except Exception as exc:
+        logger.exception("Failed to stage latest screenshot batch: %s", exc)
+        return 1
+
+    pipeline = OCRPipeline(
+        config=pipeline_config,
+        input_dir=plan.staging_dir,
+        output_dir=plan.output_dir,
+        debug_dir=plan.debug_dir,
+        logger=logger,
+    )
+    try:
+        result = pipeline.run()
+    except Exception as exc:
+        logger.exception("RO auto pipeline failed: %s", exc)
+        return 1
+
+    record_processed_batch(DEFAULT_RO_AUTO_STATE_PATH, plan)
+    logger.info("CSV: %s", result.csv_path)
+    logger.info("Graph: %s", result.graph_path)
+    logger.info("Summary TXT: %s", result.summary_txt_path)
+    logger.info("Processed images: %s", result.processed_images)
+    logger.info("Output rows: %s", result.total_rows)
+    logger.info("Warnings: %s", len(result.warnings))
+    logger.info("Errors: %s", len(result.errors))
+    if result.has_price_suspects:
+        logger.warning("price_suspect rows were detected. Please review the CSV.")
+    return 0
+
+
+def configure_logging(log_path: Path) -> logging.Logger:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("market_screenshot_ocr")
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
 
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-    file_handler = logging.FileHandler(DEFAULT_LOG_PATH, encoding="utf-8")
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 

@@ -35,7 +35,9 @@ class ProcessResult:
 
 
 class OCRPipeline:
-    def __init__(self, config: AppConfig, input_dir: Path, output_dir: Path, debug_dir: Path, logger: logging.Logger) -> None:
+    def __init__(
+        self, config: AppConfig, input_dir: Path, output_dir: Path, debug_dir: Path, logger: logging.Logger
+    ) -> None:
         self.config = config
         self.input_dir = input_dir
         self.output_dir = output_dir
@@ -58,7 +60,9 @@ class OCRPipeline:
             try:
                 loaded = load_image(image_path)
                 if not self._matches_resolution(loaded):
-                    message = f"Skipped {image_path.name}: resolution {loaded.width}x{loaded.height} does not match config."
+                    message = (
+                        f"Skipped {image_path.name}: resolution {loaded.width}x{loaded.height} does not match config."
+                    )
                     warnings.append(message)
                     self.logger.warning(message)
                     continue
@@ -86,10 +90,7 @@ class OCRPipeline:
         )
 
     def _matches_resolution(self, loaded: LoadedImage) -> bool:
-        return (
-            loaded.width == self.config.image_size.width
-            and loaded.height == self.config.image_size.height
-        )
+        return loaded.width == self.config.image_size.width and loaded.height == self.config.image_size.height
 
     def _process_image(self, loaded: LoadedImage) -> list[dict[str, str]]:
         item_name_region = self.config.regions["item_name"]
@@ -149,12 +150,22 @@ class OCRPipeline:
 
             if self.config.debug_save_enabled:
                 stem_dir = self.debug_dir / loaded.path.stem
-                save_debug_image(stem_dir / "item_name" / f"row_{item_name_row.row_index:02d}_raw.png", item_name_row.image)
-                save_debug_image(stem_dir / "item_name" / f"row_{item_name_row.row_index:02d}_processed.png", item_name_row.ocr_input)
-                save_debug_image(stem_dir / "quantity" / f"row_{quantity_row.row_index:02d}_raw.png", quantity_row.image)
-                save_debug_image(stem_dir / "quantity" / f"row_{quantity_row.row_index:02d}_processed.png", quantity_row.ocr_input)
+                save_debug_image(
+                    stem_dir / "item_name" / f"row_{item_name_row.row_index:02d}_raw.png", item_name_row.image
+                )
+                save_debug_image(
+                    stem_dir / "item_name" / f"row_{item_name_row.row_index:02d}_processed.png", item_name_row.ocr_input
+                )
+                save_debug_image(
+                    stem_dir / "quantity" / f"row_{quantity_row.row_index:02d}_raw.png", quantity_row.image
+                )
+                save_debug_image(
+                    stem_dir / "quantity" / f"row_{quantity_row.row_index:02d}_processed.png", quantity_row.ocr_input
+                )
                 save_debug_image(stem_dir / "price" / f"row_{price_row.row_index:02d}_raw.png", price_row.image)
-                save_debug_image(stem_dir / "price" / f"row_{price_row.row_index:02d}_processed.png", price_row.ocr_input)
+                save_debug_image(
+                    stem_dir / "price" / f"row_{price_row.row_index:02d}_processed.png", price_row.ocr_input
+                )
 
         self._mark_same_item_price_outliers(output_rows)
         return self._trim_trailing_empty_rows(output_rows)
@@ -165,7 +176,11 @@ class OCRPipeline:
             if region_name == "price":
                 row.ocr_input = preprocess_price_roi(raw_row_image)
             else:
-                row.ocr_input = preprocess_roi(raw_row_image, self.config.preprocess) if self.config.preprocess.enabled else raw_row_image
+                row.ocr_input = (
+                    preprocess_roi(raw_row_image, self.config.preprocess)
+                    if self.config.preprocess.enabled
+                    else raw_row_image
+                )
 
     def _save_debug_overview(self, loaded: LoadedImage) -> None:
         stem_dir = self.debug_dir / loaded.path.stem
@@ -390,7 +405,9 @@ class OCRPipeline:
         summary_txt_path.parent.mkdir(parents=True, exist_ok=True)
         summary_txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    def _write_price_quantity_chart(self, graph_path: Path, aggregated_points: list[tuple[int, int]], title: str) -> None:
+    def _write_price_quantity_chart(
+        self, graph_path: Path, aggregated_points: list[tuple[int, int]], title: str
+    ) -> None:
         width = 1600
         height = 900
         background = np.full((height, width, 3), 250, dtype=np.uint8)
@@ -425,7 +442,9 @@ class OCRPipeline:
         axis_x_y = chart_bottom + 52
         self._paste_image(background, axis_x_label, chart_left + (chart_width - axis_x_label.shape[1]) // 2, axis_x_y)
 
-        axis_y_label = self._render_text_image("数量", font_scale=0.6, thickness=1, rotate_ccw=True, text_color=(40, 40, 40))
+        axis_y_label = self._render_text_image(
+            "数量", font_scale=0.6, thickness=1, rotate_ccw=True, text_color=(40, 40, 40)
+        )
         axis_y_x = 42
         axis_y_y = chart_top + (chart_height - axis_y_label.shape[0]) // 2
         self._paste_image(background, axis_y_label, axis_y_x, axis_y_y)
@@ -452,7 +471,9 @@ class OCRPipeline:
             y = int(chart_bottom - chart_height * ratio)
             cv2.line(background, (chart_left, y), (chart_right, y), grid_color, 1)
             tick_label = self._render_text_image(str(tick_value), font_scale=0.42, thickness=1, text_color=(70, 70, 70))
-            self._paste_image(background, tick_label, chart_left - tick_label.shape[1] - 18, y - tick_label.shape[0] // 2)
+            self._paste_image(
+                background, tick_label, chart_left - tick_label.shape[1] - 18, y - tick_label.shape[0] // 2
+            )
 
         bar_count = len(aggregated_points)
         slot_width = chart_width / max(bar_count, 1)
@@ -467,12 +488,16 @@ class OCRPipeline:
             y1 = max(chart_top + 1, chart_bottom - bar_height)
             cv2.rectangle(background, (x1, y1), (x2, chart_bottom - 1), bar_color, -1)
 
-            quantity_label = self._render_text_image(str(quantity), font_scale=0.36, thickness=1, text_color=label_color)
+            quantity_label = self._render_text_image(
+                str(quantity), font_scale=0.36, thickness=1, text_color=label_color
+            )
             quantity_x = center_x - quantity_label.shape[1] // 2
             quantity_y = max(chart_top + 4, y1 - quantity_label.shape[0] - 6)
             self._paste_image(background, quantity_label, quantity_x, quantity_y)
 
-            price_label = self._render_text_image(f"{price}z", font_scale=0.34, thickness=1, rotate_ccw=True, text_color=(70, 70, 70))
+            price_label = self._render_text_image(
+                f"{price}z", font_scale=0.34, thickness=1, rotate_ccw=True, text_color=(70, 70, 70)
+            )
             label_x = center_x - price_label.shape[1] // 2
             label_y = chart_bottom + 10
             self._paste_image(background, price_label, label_x, label_y)
@@ -536,7 +561,11 @@ class OCRPipeline:
             Path(r"C:\Windows\Fonts\YuGothR.ttc"),
             Path(r"C:\Windows\Fonts\msgothic.ttc"),
         ]
-        candidate_paths = japanese_candidate_paths if self._contains_non_ascii(text) else ascii_candidate_paths + japanese_candidate_paths
+        candidate_paths = (
+            japanese_candidate_paths
+            if self._contains_non_ascii(text)
+            else ascii_candidate_paths + japanese_candidate_paths
+        )
         for path in candidate_paths:
             if path.exists():
                 return path

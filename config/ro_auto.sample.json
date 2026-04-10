@@ -1,0 +1,11 @@
+{
+  "source_dir": "C:\\Gravity\\Ragnarok\\ScreenShot",
+  "filename_regex": "^screenNoatun\\d+\\.(jpg|jpeg|png)$",
+  "batch_window_seconds": 60,
+  "staging_root": "input\\ro_auto",
+  "output_root": "output\\ro_auto",
+  "debug_root": "debug\\ro_auto",
+  "ocr_mode": "accuracy",
+  "debug_save_enabled": false,
+  "skip_already_processed_batch": true
+}

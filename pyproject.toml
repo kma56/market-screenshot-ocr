@@ -83,3 +83,7 @@ sequence = ["lint", "typecheck"]
 [tool.poe.tasks.run]
 help = "Launch the OCR GUI."
 cmd = "python app.py"
+
+[tool.poe.tasks.run_ro_auto]
+help = "Launch Ragnarok Online automatic batch mode."
+cmd = "python app.py --ro-auto"

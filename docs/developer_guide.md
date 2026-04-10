@@ -8,6 +8,7 @@
 - 起動の入口は `app.py`
 - アプリ全体の流れは `src/app.py`
 - 画面操作まわりは `src/region_selector.py`
+- RO 自動実行モードは `src/ro_auto.py`
 - OCR と CSV 出力の中心は `src/pipeline.py`
 - 認識モデルの扱いは `src/ocr_engine.py`
 
@@ -16,9 +17,14 @@
 - `app.py`
   - 起動用の入口
 - `src/app.py`
-  - GUI 起動、設定読込、OCR 実行フロー
+  - GUI 起動、CLI オプション解釈、OCR 実行フロー
 - `src/region_selector.py`
   - ROI 選択画面、パン / ズーム / 最終確認
+- `src/ro_auto.py`
+  - Ragnarok Online 用の自動実行設定
+  - 最新スクリーンショット群の検出
+  - ステージング用フォルダ作成
+  - 処理済みバッチの状態保存
 - `src/pipeline.py`
   - 画像処理全体、行分割、OCR、CSV 行生成
   - 価格別数量グラフ PNG と数量集計 TXT の生成も担当
@@ -41,6 +47,9 @@
 - `uv` のクールダウン設定として `exclude-newer = "1 week"` を使う
 - ローカルユーザー設定は `config/region.json`
 - 共有用設定例は `config/region.sample.json`
+- RO 自動実行のローカル設定は `config/ro_auto.json`
+- RO 自動実行の共有用設定例は `config/ro_auto.sample.json`
+- RO 自動実行の状態保存は `config/ro_auto_state.json`
 
 ## 開発ツール
 
@@ -75,7 +84,49 @@ uv run poe lint_fix
 uv run poe typecheck
 uv run poe check
 uv run poe run
+uv run poe run_ro_auto
 ```
+
+## 起動モード
+
+- 通常モード
+  - `uv run python app.py`
+  - GUI で入力フォルダ選択、ROI 確認、設定保存を行う
+- RO 自動実行モード
+  - `uv run python app.py --ro-auto`
+  - GUI は使わず、`config/region.json` を使って無人実行する
+  - 入力元は既定で `C:\Gravity\Ragnarok\ScreenShot`
+  - 最新画像から `batch_window_seconds` 秒以内の画像を 1 バッチとして拾う
+  - 選ばれた画像は `input/ro_auto/<batch_id>/` へコピーしてから処理する
+  - 出力は `output/ro_auto/<batch_id>/` にまとまる
+  - 同じバッチを再処理したいときだけ `--ro-auto-force` を使う
+
+ROI を変えたい場合は、必ず通常モードを起動して `config/region.json` を更新する。
+
+## RO 自動実行設定
+
+`config/ro_auto.json` が無い場合でも、コード内の既定値で動く。
+値を変えたいときは `config/ro_auto.sample.json` を元にローカル設定を作る。
+
+主な項目:
+
+- `source_dir`
+  - スクリーンショット保存先
+- `filename_regex`
+  - 自動収集対象にするファイル名パターン
+  - 既定値は `screenNoatun000.jpg` のような連番ファイル向け
+- `batch_window_seconds`
+  - 最新画像から何秒前までを同一バッチとして扱うか
+- `staging_root`
+  - 入力用にコピーした画像を置く場所
+- `output_root`
+  - 自動実行モードの出力先
+- `debug_root`
+  - 自動実行モードのデバッグ出力先
+- `ocr_mode`
+  - `accuracy` または `speed`
+- `skip_already_processed_batch`
+  - 前回と同じバッチならスキップするか
 
 ## `modelscope` スタブについて
 
