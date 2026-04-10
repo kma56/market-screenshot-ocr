@@ -33,7 +33,8 @@
 
 ## セットアップ
 
-`uv` は、Python の仮想環境作成と依存管理をまとめて扱えるツールです。
+このプロジェクトでは、初回セットアップに `uv` を使って `.venv` を作成します。
+以降の実行例は、`.venv` を有効化した前提で `python` / `poe` を使います。
 
 ```powershell
 uv venv
@@ -54,8 +55,13 @@ GPU を使わず CPU だけで動かす場合:
 uv pip install "paddlepaddle>=3.0.0"
 ```
 
-このプロジェクトは `uv` を前提にしています。依存は `.venv` に入るため、グローバル Python 環境を汚しにくい構成です。
-以下の実行例は、`.venv\Scripts\Activate.ps1` を実行して仮想環境を有効化した前提です。
+依存は `.venv` に入るため、グローバル Python 環境を汚しにくい構成です。
+
+普段の起動やコマンド実行前には、先に仮想環境を有効化してください。
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
 
 ## 使い方
 

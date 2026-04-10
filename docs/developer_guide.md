@@ -65,7 +65,7 @@
   - 目的は「まず継続運用できる型検査入口を作ること」で、将来的に徐々に厳しくしていく
 - `poethepoet`
   - 開発用コマンドを `pyproject.toml` にまとめるためのタスクランナー
-  - `uv run poe ...` で共通コマンドを呼べる
+  - 仮想環境有効化後に `poe ...` で共通コマンドを呼べる
 
 ローカル開発環境を作るときは、利用者向け README の `uv sync --no-dev` ではなく、開発用依存も含めて同期する。
 
@@ -75,31 +75,33 @@ uv venv
 uv sync
 ```
 
+以降の実行例は、`.venv\Scripts\Activate.ps1` で仮想環境を有効化した前提で書いている。
+
 よく使うタスク:
 
 ```powershell
-uv run poe format
-uv run poe lint
-uv run poe lint_fix
-uv run poe typecheck
-uv run poe check
-uv run poe run
-uv run poe run_ro_auto
+poe format
+poe lint
+poe lint_fix
+poe typecheck
+poe check
+poe run
+poe run_ro_auto
 ```
 
 ## 起動モード
 
 - 通常モード
-  - `uv run python app.py`
+  - `python app.py`
   - GUI で入力フォルダ選択、ROI 確認、設定保存を行う
 - RO 自動実行モード
-  - `uv run python app.py --ro-auto`
+  - `python app.py --ro-auto`
   - GUI は使わず、`config/region.json` を使って無人実行する
   - 入力元は既定で `C:\Gravity\Ragnarok\ScreenShot`
   - 最新画像から `batch_window_seconds` 秒以内の画像を 1 バッチとして拾う
   - 選ばれた画像は `input/ro_auto/<batch_id>/` へコピーしてから処理する
   - 出力は `output/ro_auto/<batch_id>/` にまとまる
-  - 同じバッチを再処理したいときだけ `--ro-auto-force` を使う
+  - 同じバッチを再処理したいときだけ `python app.py --ro-auto --ro-auto-force` を使う
 
 ROI を変えたい場合は、必ず通常モードを起動して `config/region.json` を更新する。
 
